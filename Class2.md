@@ -188,6 +188,97 @@ class TwoLayerNet:
 ### 3.5 训练
 > 代码和数据仿照第一个实验
 
+```
+import torch
+from torchvision import datasets, transforms
+from sklearn.model_selection import train_test_split
+
+transform = transforms.Compose([
+    transforms.ToTensor(),  # 将图像转换为Tensor
+    transforms.Normalize((0.5,), (0.5,))  # 归一化到 [0, 1]
+])
+
+# 下载 MNIST 数据集并加载到训练集
+full_train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+
+# 获取训练集的图像和标签
+x_full_train = full_train_dataset.data.numpy()  # 原始图像数据，shape = (60000, 28, 28)
+t_full_train = full_train_dataset.targets.numpy()  # 原始标签数据，shape = (60000,)
+
+# 将图像数据展平为 784 维的向量，shape = (60000, 784)
+x_full_train = x_full_train.reshape(-1, 784)
+
+# 按照 82% 和 18% 的比例拆分训练集数据
+x_train, x_test, t_train, t_test = train_test_split(x_full_train, t_full_train, test_size=0.18, random_state=42)
+```
+
+```
+import numpy as np
+from sklearn.metrics import accuracy_score
+
+# 定义训练循环的迭代次数
+iters_num = 10000  
+# 获取训练数据的规模
+train_size = x_train.shape[0]
+print(f"train_size:{train_size}")
+# 定义训练批次大小
+batch_size = 100
+# 定义学习率
+learning_rate = 0.001
+
+# 创建记录模型训练损失值的列表
+train_loss_list = []
+# 创建记录模型在训练数据集上预测精度的列表
+train_acc_list = []
+# 创建记录模型在测试数据集上预测精度的列表
+test_acc_list = []
+
+# 计算一个epoch所需的训练迭代次数（一个epoch定义为所有训练数据都遍历过一次所需的迭代次数）
+iter_per_epoch = max(train_size / batch_size, 1)
+
+# 实例化TwoLayerNet类，生成一个network对象
+input_size = 784  # 输入神经元个数（28x28像素的图片）
+hidden_size = 50  # 隐藏层神经元个数
+output_size = 10  # 输出神经元个数（10类）
+network = TwoLayerNet(input_size, hidden_size, output_size)
+
+print(x_train[0].size)
+
+# 创建训练循环
+for i in range(iters_num):
+    # 在每次训练迭代内部选择一个批次的数据
+    batch_mask = np.random.choice(train_size, batch_size)  # 随机选择批次
+    x_batch = x_train[batch_mask]
+    t_batch = t_train[batch_mask]
+    # print(f"x_batch.size = {x_batch.size}")
+    
+    # 计算梯度
+    grads = network.gradient(x_batch, t_batch)
+    
+    # 更新模型参数
+    for key in ('W1', 'b1', 'W2', 'b2'):
+        network.params[key] -= learning_rate * grads[key]
+
+    # 计算损失值
+    loss = network.loss(x_batch, t_batch)
+    
+    # 向train_loss_list添加本轮迭代的损失值
+    train_loss_list.append(loss)
+
+    # 判断是否完成了一个epoch（即训练完一个完整的批次）
+    if i % iter_per_epoch == 0:
+        # 计算训练集上的准确率
+        train_acc = network.accuracy(x_train, t_train)
+        train_acc_list.append(train_acc)
+
+        # 计算测试集上的准确率
+        test_acc = network.accuracy(x_test, t_test)
+        test_acc_list.append(test_acc)
+
+        # 输出一个epoch完成后，模型在训练集和测试集上的精度和损失值
+        print(f"iteration:{i}, train acc: {train_acc}, test acc: {test_acc}, loss: {loss}")
+```
+
 ![{9FC3E238-526C-428E-8BA3-14248EDACFE7}](https://github.com/user-attachments/assets/572485d4-e283-45f2-b47d-149e535adf37)
 
 * 速度极快，几乎可以在一分钟之内跑完一万层，并且准确率较高

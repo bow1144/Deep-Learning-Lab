@@ -306,6 +306,4 @@ class SimpleNN(nn.Module):
 
 <img width="228" alt="{A38F3F46-CF1F-4311-A1C7-8971155BA85E}" src="https://github.com/user-attachments/assets/15a42a82-ae28-498f-8a6e-640f1c1b51a7" />
 
-## 四、正则化
-
 

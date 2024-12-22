@@ -177,3 +177,135 @@ w = np.random.randn(node_num, node_num) * np.sqrt(2.0 / node_num)
 ```
 
 <img width="459" alt="{1B8E1A42-1CA4-458A-81C7-E05A74D646AA}" src="https://github.com/user-attachments/assets/7b6b9bec-d44c-4e26-9a9e-6f3d29d7f5e4" />
+
+## 三、Batch Normalization
+
+### 3.1 加载数据集
+```
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+test_dataset = datasets.MNIST(root='./data', train=False, transform=transform, download=True)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+criterion = nn.CrossEntropyLoss()
+epochs = 10
+```
+
+### 3.2 Batch Normalization
+```
+class BatchNormalization:
+
+    def __init__(self, gamma, beta, momentum=0.9, running_mean=None, running_var=None):
+        self.gamma = gamma
+        self.beta = beta
+        self.momentum = momentum
+        self.input_shape = None  # Conv层的情况下为4维，全连接层的情况下为2维
+
+        # 测试时使用的平均值和方差
+        self.running_mean = running_mean
+        self.running_var = running_var
+
+        # backward时使用的中间数据
+        self.batch_size = None
+        self.xc = None
+        self.std = None
+        self.dgamma = None
+        self.dbeta = None
+
+    def forward(self, x, train_flg=True):
+        self.input_shape = x.shape
+        #将每一个样本由三维数组转换为一维数组
+        if x.ndim != 2:
+            N, C, H, W = x.shape
+            x = x.reshape(N, -1)
+        #在__forward方法中完成BatchNorm函数的前向传播
+        out = self.__forward(x, train_flg)
+
+        return out.reshape(*self.input_shape)
+
+    def __forward(self, x, train_flg):
+        if self.running_mean is None:
+            N, D = x.shape
+            self.running_mean = np.zeros(D)
+            self.running_var = np.zeros(D)
+
+        if train_flg:
+            mu = x.mean(axis=0)
+            xc = x - mu
+            var = np.mean(xc**2, axis=0)
+            std = np.sqrt(var + 10e-7)
+            xn = xc / std
+
+            self.batch_size = x.shape[0]
+            self.xc = xc
+            self.xn = xn
+            self.std = std
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mu
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
+        else:
+            xc = x - self.running_mean
+            xn = xc / ((np.sqrt(self.running_var + 10e-7)))
+
+        out = self.gamma * xn + self.beta
+        return out
+
+    def backward(self, dout):
+        if dout.ndim != 2:
+            N, C, H, W = dout.shape
+            dout = dout.reshape(N, -1)
+
+        dx = self.__backward(dout)
+
+        dx = dx.reshape(*self.input_shape)
+        return dx
+
+    def __backward(self, dout):
+        dbeta = dout.sum(axis=0)
+        dgamma = np.sum(self.xn * dout, axis=0)
+        dxn = self.gamma * dout
+        dxc = dxn / self.std
+        dstd = -np.sum((dxn * self.xc) / (self.std * self.std), axis=0)
+        dvar = 0.5 * dstd / self.std
+        dxc += (2.0 / self.batch_size) * self.xc * dvar
+        dmu = np.sum(dxc, axis=0)
+        dx = dxc - dmu / self.batch_size
+
+        self.dgamma = dgamma
+        self.dbeta = dbeta
+
+        return dx
+```
+
+### 3.3 普通神经网络
+```
+class SimpleNN(nn.Module):
+    def __init__(self, use_batch_norm=False):
+        super(SimpleNN, self).__init__()
+        self.use_batch_norm = use_batch_norm
+        self.fc1 = nn.Linear(28*28, 256)
+        self.bn1 = nn.BatchNorm1d(256) if use_batch_norm else nn.Identity()
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(256, 128)
+        self.bn2 = nn.BatchNorm1d(128) if use_batch_norm else nn.Identity()
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(128, 10)
+        
+    def forward(self, x):
+        x = x.view(x.size(0), -1)  # Flatten the input
+        x = self.relu1(self.bn1(self.fc1(x)))
+        x = self.relu2(self.bn2(self.fc2(x)))
+        x = self.fc3(x)
+        return x
+```
+
+### 3.4 运行结果
+
+<img width="474" alt="{53C40BD3-8E3F-46FA-9B72-11E5F1DB76E4}" src="https://github.com/user-attachments/assets/5df231c9-bee0-43ac-98a1-2c5f02c7ba93" />
+
+<img width="228" alt="{A38F3F46-CF1F-4311-A1C7-8971155BA85E}" src="https://github.com/user-attachments/assets/15a42a82-ae28-498f-8a6e-640f1c1b51a7" />
+
+## 四、正则化
+
+
